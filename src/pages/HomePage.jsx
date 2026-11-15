@@ -58,13 +58,23 @@ export const HomePage = ({ events = [] }) => {
               <ArrowRight className="w-4 h-4" />
             </Link>
 
-            <Link
-              to="/dashboard"
-              className="w-full sm:w-auto px-7 py-3.5 rounded-2xl font-bold text-sm text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 shadow-sm hover:shadow transition-all flex items-center justify-center gap-2"
-            >
-              <Calendar className="w-4 h-4 text-brand-500" />
-              <span>Organiser Dashboard</span>
-            </Link>
+            {isOrganiser ? (
+              <Link
+                to="/dashboard"
+                className="w-full sm:w-auto px-7 py-3.5 rounded-2xl font-bold text-sm text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 shadow-sm hover:shadow transition-all flex items-center justify-center gap-2"
+              >
+                <Calendar className="w-4 h-4 text-indigo-500" />
+                <span>Organiser Dashboard</span>
+              </Link>
+            ) : (
+              <Link
+                to="/my-tickets"
+                className="w-full sm:w-auto px-7 py-3.5 rounded-2xl font-bold text-sm text-slate-700 bg-white hover:bg-slate-50 border border-slate-200/90 shadow-sm hover:shadow transition-all flex items-center justify-center gap-2"
+              >
+                <Ticket className="w-4 h-4 text-brand-500" />
+                <span>My Event Passes</span>
+              </Link>
+            )}
           </div>
 
           {/* Live Campus Metric Bar */}

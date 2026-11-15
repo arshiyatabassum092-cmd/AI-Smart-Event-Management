@@ -14,11 +14,13 @@ import {
 } from 'lucide-react';
 import { eventService } from '../services/eventService';
 import { registrationService } from '../services/registrationService';
+import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 
 export const EventParticipantsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const { notifyInfo } = useNotification();
 
   const [event, setEvent] = useState(null);
@@ -33,7 +35,7 @@ export const EventParticipantsPage = () => {
         const eventData = await eventService.getEventById(id);
         setEvent(eventData);
 
-        const list = await registrationService.getEventParticipants(id);
+        const list = await registrationService.getEventParticipants(id, currentUser?.uid);
         setParticipants(list);
       } catch (err) {
         console.error('Failed to load participants:', err);

@@ -44,6 +44,7 @@ export const registrationService = {
       eventTime: event.time,
       eventVenue: event.venue,
       eventCategory: event.category,
+      organiserId: event.organiserId || '',
       userId: user.uid,
       participantName: participantDetails.fullName || user.displayName || 'Anonymous Student',
       participantEmail: participantDetails.email || user.email,
@@ -71,6 +72,12 @@ export const registrationService = {
           registeredCount: increment(1)
         });
 
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('smart_events_registration_changed', {
+            detail: { eventId: event.id, registration: registrationDoc }
+          }));
+        }
+
         return registrationDoc;
       } catch (err) {
         console.warn('Firestore registration failed, falling back locally:', err);
@@ -79,7 +86,8 @@ export const registrationService = {
 
     // Local fallback
     const list = getLocalRegistrations();
-    const existingIndex = list.findIndex(r => r.id === registrationId);
+    // Enforce strictly 1 registration per student per event to prevent duplicate count inflation
+    const existingIndex = list.findIndex(r => r.id === registrationId || (r.eventId === event.id && r.userId === user.uid));
     if (existingIndex !== -1) {
       throw new Error('You have already registered for this event.');
     }
@@ -97,6 +105,12 @@ export const registrationService = {
       }
     } catch {}
 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('smart_events_registration_changed', {
+        detail: { eventId: event.id, registration: registrationDoc }
+      }));
+    }
+
     return registrationDoc;
   },
 
@@ -106,9 +120,12 @@ export const registrationService = {
 
     if (isFirebaseConfigured && db) {
       try {
+        // Use a direct document get instead of a collection query so the
+        // Firestore get-rule (userId == auth.uid) is satisfied cleanly.
+        const { getDoc: firestoreGetDoc } = await import('firebase/firestore');
         const regRef = doc(db, 'registrations', `${eventId}_${userId}`);
-        const snap = await getDocs(query(collection(db, 'registrations'), where('eventId', '==', eventId), where('userId', '==', userId)));
-        return !snap.empty;
+        const snap = await firestoreGetDoc(regRef);
+        return snap.exists();
       } catch (e) {
         console.warn('Error checking registration status in Firestore:', e);
       }
@@ -137,21 +154,99 @@ export const registrationService = {
   },
 
   // 4. Get all participants for a specific event (Organiser view)
-  async getEventParticipants(eventId) {
+  async getEventParticipants(eventId, organiserId) {
     if (!eventId) return [];
 
+    let list = [];
     if (isFirebaseConfigured && db) {
       try {
-        const q = query(collection(db, 'registrations'), where('eventId', '==', eventId));
+        // If the caller provides their organiserId, scope the query so the
+        // Firestore list-rule (resource.data.organiserId == auth.uid) passes.
+        const constraints = [where('eventId', '==', eventId)];
+        if (organiserId) {
+          constraints.push(where('organiserId', '==', organiserId));
+        }
+        const q = query(collection(db, 'registrations'), ...constraints);
         const snap = await getDocs(q);
-        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       } catch (err) {
         console.warn('Error fetching event participants from Firestore:', err);
       }
+    } else {
+      list = getLocalRegistrations().filter(r => r.eventId === eventId);
     }
 
+    // Deduplicate by student identity to guarantee 1 participant slot per student
+    const seen = new Set();
+    const unique = [];
+    for (const p of list) {
+      const key = p.userId || p.participantEmail || p.id;
+      if (!seen.has(key) && p.status !== 'cancelled') {
+        seen.add(key);
+        unique.push(p);
+      }
+    }
+    return unique;
+  },
+
+  // 4b. Get all confirmed registrations across all events (Organiser view)
+  async getAllRegistrations(organiserId) {
+    if (isFirebaseConfigured && db) {
+      try {
+        // Scope the query to the organiser's own registrations so the
+        // Firestore list-rule is satisfied.
+        if (organiserId) {
+          const q = query(collection(db, 'registrations'), where('organiserId', '==', organiserId));
+          const snap = await getDocs(q);
+          return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
+        // Fallback: unscoped read (may be denied by rules but kept for
+        // local/demo mode compatibility).
+        const snap = await getDocs(collection(db, 'registrations'));
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } catch (err) {
+        console.warn('Error fetching all registrations from Firestore:', err);
+      }
+    }
+    return getLocalRegistrations();
+  },
+
+  // 4c. Calculate accurate unique registered participant counts per event from actual registration records
+  async getRegistrationCounts(organiserId) {
+    const list = await this.getAllRegistrations(organiserId);
+    const counts = {};
+    const seenByEvent = {};
+    for (const r of list) {
+      if (r.eventId && r.status !== 'cancelled') {
+        if (!seenByEvent[r.eventId]) {
+          seenByEvent[r.eventId] = new Set();
+        }
+        const userKey = r.userId || r.participantEmail || r.id;
+        if (!seenByEvent[r.eventId].has(userKey)) {
+          seenByEvent[r.eventId].add(userKey);
+          counts[r.eventId] = (counts[r.eventId] || 0) + 1;
+        }
+      }
+    }
+    return counts;
+  },
+
+  // 4d. Synchronous local participant count from storage records
+  getLocalEventParticipantCount(eventId) {
+    if (!eventId) return 0;
     const list = getLocalRegistrations();
-    return list.filter(r => r.eventId === eventId);
+    const seen = new Set();
+    let count = 0;
+    for (const r of list) {
+      if (r.eventId === eventId && r.status !== 'cancelled') {
+        const key = r.userId || r.participantEmail || r.id;
+        if (!seen.has(key)) {
+          seen.add(key);
+          count++;
+        }
+      }
+    }
+    return count;
   },
 
   // 5. Cancel registration
@@ -167,6 +262,13 @@ export const registrationService = {
         await updateDoc(eventRef, {
           registeredCount: increment(-1)
         });
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('smart_events_registration_changed', {
+            detail: { eventId, cancelled: true }
+          }));
+        }
+
         return true;
       } catch (err) {
         console.warn('Firestore cancellation failed:', err);
@@ -174,7 +276,7 @@ export const registrationService = {
     }
 
     const list = getLocalRegistrations();
-    const updated = list.filter(r => r.id !== registrationId);
+    const updated = list.filter(r => r.id !== registrationId && !(r.eventId === eventId && r.userId === userId));
     saveLocalRegistrations(updated);
 
     try {
@@ -185,6 +287,12 @@ export const registrationService = {
         localStorage.setItem('smart_events_catalogue', JSON.stringify(storedEvents));
       }
     } catch {}
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('smart_events_registration_changed', {
+        detail: { eventId, cancelled: true }
+      }));
+    }
 
     return true;
   },

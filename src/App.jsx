@@ -45,21 +45,39 @@ export function App() {
     }
   }, []);
 
+  // Reload events whenever active role switches between Student and Organiser
+  useEffect(() => {
+    loadEvents();
+  }, [isOrganiser]);
+
+  // Listen for registration updates across the application and keep events synchronized
+  useEffect(() => {
+    const handleRegistrationChange = () => {
+      loadEvents();
+    };
+    window.addEventListener('smart_events_registration_changed', handleRegistrationChange);
+    window.addEventListener('storage', handleRegistrationChange);
+    return () => {
+      window.removeEventListener('smart_events_registration_changed', handleRegistrationChange);
+      window.removeEventListener('storage', handleRegistrationChange);
+    };
+  }, []);
+
   const handleEventCreated = async (newEvent) => {
     const created = await eventService.createEvent(newEvent);
-    setEvents((prev) => [created, ...prev]);
+    await loadEvents();
     return created;
   };
 
   const handleEventUpdated = async (id, updatedFields) => {
     const updated = await eventService.updateEvent(id, updatedFields);
-    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, ...updated } : e)));
+    await loadEvents();
     return updated;
   };
 
   const handleEventDeleted = async (id) => {
     await eventService.deleteEvent(id);
-    setEvents((prev) => prev.filter((e) => e.id !== id));
+    await loadEvents();
   };
 
   const handleSeedDemo = async () => {
@@ -100,21 +118,43 @@ export function App() {
         <Routes>
           <Route path="/" element={<HomePage events={events} />} />
           <Route path="/events" element={<EventsPage events={events} />} />
-          <Route path="/events/:id" element={<EventDetailPage />} />
-          <Route path="/my-tickets" element={<MyRegistrationsPage />} />
+          <Route path="/events/:id" element={<EventDetailPage onRegistrationSuccess={loadEvents} />} />
+          <Route
+            path="/my-tickets"
+            element={
+              isOrganiser ? (
+                <Navigate to="/dashboard" replace />
+              ) : (
+                <MyRegistrationsPage />
+              )
+            }
+          />
           <Route
             path="/dashboard"
             element={
-              <DashboardPage
-                events={events}
-                onEventCreated={handleEventCreated}
-                onEventUpdated={handleEventUpdated}
-                onEventDeleted={handleEventDeleted}
-                onSeedDemo={handleSeedDemo}
-              />
+              !isOrganiser ? (
+                <Navigate to="/events" replace />
+              ) : (
+                <DashboardPage
+                  events={events}
+                  onEventCreated={handleEventCreated}
+                  onEventUpdated={handleEventUpdated}
+                  onEventDeleted={handleEventDeleted}
+                  onSeedDemo={handleSeedDemo}
+                />
+              )
             }
           />
-          <Route path="/dashboard/events/:id/participants" element={<EventParticipantsPage />} />
+          <Route
+            path="/dashboard/events/:id/participants"
+            element={
+              !isOrganiser ? (
+                <Navigate to="/events" replace />
+              ) : (
+                <EventParticipantsPage />
+              )
+            }
+          />
           <Route path="/login" element={<LoginPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

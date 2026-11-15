@@ -39,6 +39,10 @@ export const LoginPage = () => {
       } else {
         await login(email, password);
         notifySuccess('Signed in successfully!');
+        navigate(role === 'organiser' ? '/dashboard' : '/events', {
+          replace: true
+        });
+        return;
       }
       navigate(from, { replace: true });
     } catch (err) {
@@ -53,7 +57,9 @@ export const LoginPage = () => {
       setLoading(true);
       await loginWithGoogle(role);
       notifySuccess('Signed in with Google!');
-      navigate(from, { replace: true });
+      navigate(role === 'organiser' ? '/dashboard' : '/events', {
+        replace: true
+      });
     } catch (err) {
       notifyError(err.message || 'Google sign-in error.');
     } finally {
@@ -62,11 +68,13 @@ export const LoginPage = () => {
   };
 
   const handleOneClickDemo = (selectedRole) => {
-    switchDemoRole(selectedRole);
-    notifySuccess(`Switched to Demo ${selectedRole === 'organiser' ? 'Organiser' : 'Student'} mode!`);
-    navigate(selectedRole === 'organiser' ? '/dashboard' : '/events');
-  };
+  setRole(selectedRole);
+  setIsSignUp(false);
 
+  notifySuccess(
+    `Selected ${selectedRole === 'organiser' ? 'Organiser' : 'Student'} sign-in. Your account permissions will be verified after login.`
+  );
+};
   return (
     <div className="min-h-[80vh] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200/90 shadow-xl p-8 space-y-6">
@@ -132,18 +140,7 @@ export const LoginPage = () => {
                     <GraduationCap className="w-4 h-4" />
                     Student
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('organiser')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
-                      role === 'organiser'
-                        ? 'bg-brand-50 border-brand-500 text-brand-700'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <ShieldCheck className="w-4 h-4" />
-                    Organiser
-                  </button>
+                  
                 </div>
               </div>
 

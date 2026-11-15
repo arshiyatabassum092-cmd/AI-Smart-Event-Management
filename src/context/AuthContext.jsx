@@ -78,6 +78,14 @@ export const AuthProvider = ({ children }) => {
       if (savedUser) {
         try {
           const parsed = JSON.parse(savedUser);
+          // Ensure uid matches role if previously stored with legacy mismatched uid
+          if (parsed.role === 'organiser' && parsed.uid === 'student-demo-user-202') {
+            parsed.uid = 'org-demo-user-101';
+            localStorage.setItem('smart_events_demo_user', JSON.stringify(parsed));
+          } else if (parsed.role === 'student' && parsed.uid === 'org-demo-user-101') {
+            parsed.uid = 'student-demo-user-202';
+            localStorage.setItem('smart_events_demo_user', JSON.stringify(parsed));
+          }
           setCurrentUser(parsed);
           setUserProfile(parsed);
         } catch {
@@ -104,7 +112,7 @@ export const AuthProvider = ({ children }) => {
         uid: res.user.uid,
         email,
         displayName,
-        role,
+        role: 'student',
         college: meta.college || 'Campus Institute of Technology',
         department: meta.department || 'Computer Science',
         yearOfStudy: meta.yearOfStudy || '2nd Year',
@@ -152,33 +160,55 @@ export const AuthProvider = ({ children }) => {
   };
 
   // 3. Google Sign In
-  const loginWithGoogle = async (preferredRole = 'student') => {
-    if (isFirebaseConfigured && auth && googleProvider) {
-      const res = await signInWithPopup(auth, googleProvider);
-      const userDoc = await getDoc(doc(db, 'users', res.user.uid));
-      if (!userDoc.exists() && db) {
-        const newProf = {
-          uid: res.user.uid,
-          email: res.user.email,
-          displayName: res.user.displayName,
-          role: preferredRole,
-          college: 'Campus Institute of Technology',
-          department: 'Computer Science',
-          yearOfStudy: '2nd Year',
-          createdAt: new Date().toISOString()
-        };
-        await setDoc(doc(db, 'users', res.user.uid), newProf);
-        setUserProfile(newProf);
-      }
-      return res.user;
+  
+const loginWithGoogle = async (preferredRole = 'student') => {
+  if (isFirebaseConfigured && auth && googleProvider && db) {
+    const res = await signInWithPopup(auth, googleProvider);
+
+    const userRef = doc(db, 'users', res.user.uid);
+    const userDoc = await getDoc(userRef);
+
+    if (userDoc.exists()) {
+      // Load the existing user's actual Firebase role
+      const profile = {
+        ...userDoc.data(),
+        uid: res.user.uid,
+        email: res.user.email,
+        displayName: res.user.displayName || userDoc.data().displayName
+      };
+
+      setCurrentUser(res.user);
+      setUserProfile(profile);
+      console.log("FIREBASE USER ROLE:", profile.role);
     } else {
-      const demo = initDemoUser(preferredRole);
-      setCurrentUser(demo);
-      setUserProfile(demo);
-      localStorage.setItem('smart_events_demo_user', JSON.stringify(demo));
-      return demo;
+      // New accounts always start as students
+      const newProf = {
+        uid: res.user.uid,
+        email: res.user.email,
+        displayName: res.user.displayName,
+        role: 'student',
+        college: 'Campus Institute of Technology',
+        department: 'Computer Science',
+        yearOfStudy: '2nd Year',
+        createdAt: new Date().toISOString()
+      };
+
+      await setDoc(userRef, newProf);
+
+      setCurrentUser(res.user);
+      setUserProfile(newProf);
     }
-  };
+
+    return res.user;
+  } else {
+    const demo = initDemoUser(preferredRole);
+    setCurrentUser(demo);
+    setUserProfile(demo);
+    localStorage.setItem('smart_events_demo_user', JSON.stringify(demo));
+    return demo;
+  }
+};
+
 
   // 4. Logout
   const logout = async () => {
@@ -192,22 +222,29 @@ export const AuthProvider = ({ children }) => {
 
   // 5. Presentation Demo Helper: Switch roles quickly for viva evaluation
   const switchDemoRole = (newRole) => {
-    const updated = {
-      ...(userProfile || initDemoUser(newRole)),
-      role: newRole,
-      displayName: newRole === 'organiser' ? 'Prof. Alex Turner (Faculty Coordinator)' : 'Sarah Jenkins (Student)',
-      email: newRole === 'organiser' ? 'organiser@campus.edu' : 'student@campus.edu'
-    };
-    setCurrentUser(updated);
-    setUserProfile(updated);
-    localStorage.setItem('smart_events_demo_user', JSON.stringify(updated));
+  // Real Firebase users cannot change their permissions using this button.
+  if (isFirebaseConfigured) return;
+
+  // This switch is only for local demo mode.
+  if (!currentUser) return;
+
+  const demoUser = {
+    ...currentUser,
+    role: newRole
   };
+
+  setCurrentUser(demoUser);
+  setUserProfile(demoUser);
+  localStorage.setItem('smart_events_demo_user', JSON.stringify(demoUser));
+};
+
+  const isOrganiser = userProfile?.role === 'organiser' || userProfile?.role === 'admin';
 
   const value = {
     currentUser,
     userProfile,
-    isOrganiser: userProfile?.role === 'organiser' || userProfile?.role === 'admin',
-    isStudent: userProfile?.role === 'student',
+    isOrganiser,
+    isStudent: !isOrganiser,
     signup,
     login,
     loginWithGoogle,

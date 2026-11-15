@@ -18,14 +18,42 @@ const LOCAL_STORAGE_KEY = 'smart_events_catalogue';
 // Helper to initialize local storage fallback
 const getLocalEvents = () => {
   const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+  let events = [];
   if (!stored) {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_SAMPLE_EVENTS));
-    return INITIAL_SAMPLE_EVENTS;
+    events = INITIAL_SAMPLE_EVENTS;
+  } else {
+    try {
+      events = JSON.parse(stored);
+    } catch (e) {
+      events = INITIAL_SAMPLE_EVENTS;
+    }
   }
+
+  // Synchronize registeredCount with actual registration records from smart_events_registrations
   try {
-    return JSON.parse(stored);
-  } catch (e) {
-    return INITIAL_SAMPLE_EVENTS;
+    const regList = JSON.parse(localStorage.getItem('smart_events_registrations') || '[]');
+    const seenByEvent = {};
+    const regCounts = {};
+    for (const r of regList) {
+      if (r.eventId && r.status !== 'cancelled') {
+        if (!seenByEvent[r.eventId]) seenByEvent[r.eventId] = new Set();
+        const key = r.userId || r.participantEmail || r.id;
+        if (!seenByEvent[r.eventId].has(key)) {
+          seenByEvent[r.eventId].add(key);
+          regCounts[r.eventId] = (regCounts[r.eventId] || 0) + 1;
+        }
+      }
+    }
+
+    return events.map(evt => {
+      const actualCount = regCounts[evt.id] || 0;
+      const storedCount = Number(evt.registeredCount) || 0;
+      const count = Math.max(actualCount, storedCount);
+      return { ...evt, registeredCount: count };
+    });
+  } catch {
+    return events;
   }
 };
 

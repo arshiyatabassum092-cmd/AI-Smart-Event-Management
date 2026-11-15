@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -17,17 +17,51 @@ import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { EventFormModal } from '../components/events/EventFormModal';
 import { eventService } from '../services/eventService';
+import { registrationService } from '../services/registrationService';
 
 export const DashboardPage = ({ events = [], onEventCreated, onEventUpdated, onEventDeleted, onSeedDemo }) => {
-  const { userProfile } = useAuth();
+  const { userProfile, currentUser } = useAuth();
   const { notifySuccess, notifyError } = useNotification();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedEventToEdit, setSelectedEventToEdit] = useState(null);
+  const [regCounts, setRegCounts] = useState({});
 
-  // Compute metrics
+  const fetchRegistrationCounts = async () => {
+    try {
+      const counts = await registrationService.getRegistrationCounts(currentUser?.uid);
+      setRegCounts(counts);
+    } catch (err) {
+      console.warn('Failed to fetch registration counts:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchRegistrationCounts();
+    const handleUpdate = () => {
+      fetchRegistrationCounts();
+    };
+    window.addEventListener('smart_events_registration_changed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('smart_events_registration_changed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, [events]);
+
+  const getEventRegisteredCount = (event) => {
+    if (!event) return 0;
+    const actualRegs = regCounts[event.id];
+    const storedCount = Number(event.registeredCount) || 0;
+    if (actualRegs !== undefined) {
+      return Math.max(actualRegs, storedCount);
+    }
+    return storedCount;
+  };
+
+  // Compute metrics from actual registration records
   const totalEvents = events.length;
-  const totalRegistrations = events.reduce((sum, e) => sum + (Number(e.registeredCount) || 0), 0);
+  const totalRegistrations = events.reduce((sum, e) => sum + getEventRegisteredCount(e), 0);
   const totalCapacity = events.reduce((sum, e) => sum + (Number(e.capacity) || 100), 0);
   const avgOccupancy = totalCapacity > 0 ? Math.round((totalRegistrations / totalCapacity) * 100) : 0;
 
@@ -160,7 +194,7 @@ export const DashboardPage = ({ events = [], onEventCreated, onEventUpdated, onE
             <tbody className="divide-y divide-slate-100">
               {events.map((event) => {
                 const capacity = Number(event.capacity) || 100;
-                const registered = Number(event.registeredCount) || 0;
+                const registered = getEventRegisteredCount(event);
                 const percentage = Math.min(100, Math.round((registered / capacity) * 100));
 
                 return (

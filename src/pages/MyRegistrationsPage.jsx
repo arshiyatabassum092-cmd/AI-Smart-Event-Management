@@ -1,26 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Ticket, Calendar, Clock, MapPin, QrCode, Trash2, Download, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { registrationService } from '../services/registrationService';
 
 export const MyRegistrationsPage = () => {
-  const { currentUser, userProfile } = useAuth();
+  const { currentUser, userProfile, isOrganiser } = useAuth();
   const { notifySuccess, notifyError } = useNotification();
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchRegistrations = async () => {
-      if (!currentUser) {
+      if (!currentUser || isOrganiser) {
+        setRegistrations([]);
         setLoading(false);
         return;
       }
       try {
         setLoading(true);
         const data = await registrationService.getUserRegistrations(currentUser.uid);
-        setRegistrations(data);
+        // Ensure that only registrations matching this student's uid are shown
+        const ownRegistrations = (data || []).filter((r) => r.userId === currentUser.uid);
+        setRegistrations(ownRegistrations);
       } catch (err) {
         console.error('Failed to fetch user registrations:', err);
       } finally {
@@ -28,7 +31,11 @@ export const MyRegistrationsPage = () => {
       }
     };
     fetchRegistrations();
-  }, [currentUser]);
+  }, [currentUser, isOrganiser]);
+
+  if (isOrganiser) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleCancelRegistration = async (eventId) => {
     if (!window.confirm('Are you sure you want to cancel your registration for this event?')) {

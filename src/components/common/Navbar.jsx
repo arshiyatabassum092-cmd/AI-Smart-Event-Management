@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Calendar,
@@ -17,9 +17,19 @@ import {
 export const Navbar = () => {
   const { currentUser, userProfile, isOrganiser, logout, switchDemoRole } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isActive = (path) => location.pathname === path;
+
+  const handleRoleSwitch = (newRole) => {
+    switchDemoRole(newRole);
+    if (newRole === 'organiser' && location.pathname === '/my-tickets') {
+      navigate('/dashboard');
+    } else if (newRole === 'student' && location.pathname.startsWith('/dashboard')) {
+      navigate('/events');
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-sm transition-all">
@@ -63,7 +73,8 @@ export const Navbar = () => {
               Explore Events
             </Link>
 
-            {currentUser && (
+            {/* Student Mode: Show My Passes */}
+            {!isOrganiser && (
               <Link
                 to="/my-tickets"
                 className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
@@ -77,6 +88,7 @@ export const Navbar = () => {
               </Link>
             )}
 
+            {/* Organiser Mode: Show Organiser Dashboard */}
             {isOrganiser && (
               <Link
                 to="/dashboard"
@@ -97,7 +109,7 @@ export const Navbar = () => {
             {/* Presentation Role Switcher Pill */}
             <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-medium">
               <button
-                onClick={() => switchDemoRole('student')}
+                onClick={() => handleRoleSwitch('student')}
                 title="Switch view to Student mode"
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all ${
                   !isOrganiser
@@ -109,7 +121,7 @@ export const Navbar = () => {
                 Student
               </button>
               <button
-                onClick={() => switchDemoRole('organiser')}
+                onClick={() => handleRoleSwitch('organiser')}
                 title="Switch view to Organiser mode"
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg transition-all ${
                   isOrganiser
@@ -175,13 +187,13 @@ export const Navbar = () => {
             <span className="text-xs font-semibold text-slate-600">Active Role Mode:</span>
             <div className="flex gap-1 text-xs">
               <button
-                onClick={() => { switchDemoRole('student'); setMobileMenuOpen(false); }}
+                onClick={() => { handleRoleSwitch('student'); setMobileMenuOpen(false); }}
                 className={`px-2 py-1 rounded-md ${!isOrganiser ? 'bg-brand-600 text-white' : 'bg-slate-200'}`}
               >
                 Student
               </button>
               <button
-                onClick={() => { switchDemoRole('organiser'); setMobileMenuOpen(false); }}
+                onClick={() => { handleRoleSwitch('organiser'); setMobileMenuOpen(false); }}
                 className={`px-2 py-1 rounded-md ${isOrganiser ? 'bg-brand-600 text-white' : 'bg-slate-200'}`}
               >
                 Organiser
@@ -203,7 +215,7 @@ export const Navbar = () => {
           >
             Explore Events
           </Link>
-          {currentUser && (
+          {!isOrganiser && (
             <Link
               to="/my-tickets"
               onClick={() => setMobileMenuOpen(false)}

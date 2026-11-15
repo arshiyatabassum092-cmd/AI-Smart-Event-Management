@@ -1,7 +1,10 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Calendar, Github, Heart, Sparkles, ExternalLink } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export const Footer = () => {
+  const { isOrganiser } = useAuth();
   return (
     <footer className="bg-slate-900 text-slate-400 text-sm border-t border-slate-800 pt-12 pb-8 mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -36,10 +39,14 @@ export const Footer = () => {
           <div>
             <h4 className="font-semibold text-white mb-3 text-xs uppercase tracking-wider">Navigation</h4>
             <ul className="space-y-2">
-              <li><a href="/" className="hover:text-brand-400 transition-colors">Home Overview</a></li>
-              <li><a href="/events" className="hover:text-brand-400 transition-colors">Upcoming Events</a></li>
-              <li><a href="/my-tickets" className="hover:text-brand-400 transition-colors">My Event Passes</a></li>
-              <li><a href="/dashboard" className="hover:text-brand-400 transition-colors">Organiser Dashboard</a></li>
+              <li><Link to="/" className="hover:text-brand-400 transition-colors">Home Overview</Link></li>
+              <li><Link to="/events" className="hover:text-brand-400 transition-colors">Upcoming Events</Link></li>
+              {!isOrganiser && (
+                <li><Link to="/my-tickets" className="hover:text-brand-400 transition-colors">My Event Passes</Link></li>
+              )}
+              {isOrganiser && (
+                <li><Link to="/dashboard" className="hover:text-brand-400 transition-colors">Organiser Dashboard</Link></li>
+              )}
             </ul>
           </div>
 

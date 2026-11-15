@@ -19,10 +19,10 @@ import { RegistrationModal } from '../components/events/RegistrationModal';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 
-export const EventDetailPage = () => {
+export const EventDetailPage = ({ onRegistrationSuccess }) => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, isOrganiser } = useAuth();
   const { notifySuccess, notifyInfo } = useNotification();
 
   const [event, setEvent] = useState(null);
@@ -62,6 +62,9 @@ export const EventDetailPage = () => {
       ...prev,
       registeredCount: (prev.registeredCount || 0) + 1
     }));
+    if (onRegistrationSuccess) {
+      onRegistrationSuccess();
+    }
   };
 
   if (loading) {
@@ -240,7 +243,23 @@ export const EventDetailPage = () => {
 
             {/* Registration Action */}
             <div className="pt-2">
-              {isRegistered ? (
+              {isOrganiser ? (
+                <div className="space-y-3">
+                  <Link
+                    to={`/dashboard/events/${event.id}/participants`}
+                    className="w-full py-3 px-4 rounded-2xl font-bold text-sm text-white bg-indigo-600 hover:bg-indigo-700 shadow-xl shadow-indigo-500/25 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span>Manage Participants ({registered})</span>
+                  </Link>
+                  <Link
+                    to="/dashboard"
+                    className="w-full py-2.5 px-4 rounded-xl font-semibold text-xs text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <span>Back to Dashboard</span>
+                  </Link>
+                </div>
+              ) : isRegistered ? (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center space-y-2">
                   <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
                     <CheckCircle className="w-5 h-5" />

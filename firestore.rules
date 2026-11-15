@@ -22,11 +22,20 @@ service cloud.firestore {
     }
     
     // Event Registrations:
-    // - Students can view and cancel their own tickets
-    // - Event organizers can read the participant roster for their events
+    // - Students can view and cancel their own tickets (queries by userId)
+    // - Event organizers can view participants for their events (queries by organiserId)
     // - Authenticated students can register for events
     match /registrations/{registrationId} {
-      allow read: if request.auth != null && (
+      // Single-document reads
+      allow get: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.organiserId == request.auth.uid
+      );
+      // Collection queries: every returned document must belong to the
+      // querying user (as participant) or carry their organiserId.  The
+      // client must include a matching where() clause so Firestore can
+      // prove the constraint at query-plan time.
+      allow list: if request.auth != null && (
         resource.data.userId == request.auth.uid ||
         resource.data.organiserId == request.auth.uid
       );
