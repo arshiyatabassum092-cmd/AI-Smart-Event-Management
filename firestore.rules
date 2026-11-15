@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User Profiles: Authenticated users can read; each user can update only their own profile
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Campus Events:
+    // - Anyone can view events (public discovery)
+    // - Authenticated users can create events
+    // - Only event organizers can update/delete their own events (or allow seat count increments during registration)
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        resource.data.organiserId == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredCount'])
+      );
+    }
+    
+    // Event Registrations:
+    // - Students can view and cancel their own tickets
+    // - Event organizers can read the participant roster for their events
+    // - Authenticated students can register for events
+    match /registrations/{registrationId} {
+      allow read: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.organiserId == request.auth.uid
+      );
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.userId == request.auth.uid;
+    }
+  }
+}
